@@ -1,0 +1,448 @@
+---
+title: "Final Projct"
+author: Cindy Chen
+output:
+  pdf_document:
+    latex_engine : xelatex 
+---
+
+# Explanatory Problem #
+
+## Data Collection ##
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+
+
+```
+```{r}
+OR_house = read.csv("OR_acs_house_occ.csv", header=TRUE)
+head(OR_house)
+```
+
+
+```{r}
+summary(OR_house)
+```
+```{r}
+names(OR_house)
+```
+```{r}
+
+any_missing <- sum(is.na(OR_house))
+
+
+missing_per_column <- colSums(is.na(OR_house))
+
+
+if (any_missing > 0) {
+  print("There are missing values in the dataset.")
+  print(paste("Total missing values:", any_missing))
+  print("Missing values per column:")
+  print(missing_per_column)
+} else {
+  print("There are no missing values in the dataset.")
+}
+
+```
+```{r}
+any_missing_after <- sum(is.na(OR_house))
+
+if (any_missing_after > 0) {
+  print("There are still missing values in the dataset after filtering.")
+  print(paste("Total missing values after filtering:", any_missing_after))
+} else {
+  print("All missing values have been replaced with 0.")
+}
+
+
+```
+
+
+## Analyze housing type's mean ELEP ##
+
+```{r}
+# Get unique values of BLD
+unique_values <- unique(OR_house$BLD)
+
+# Print unique values
+print(unique_values)
+
+```
+
+
+```{r}
+length(OR_house$BLD)
+sum(is.na(OR_house$BLD))
+
+OR_house <- OR_house[!is.na(OR_house$BLD), ]
+
+OR_house <- OR_house |>
+  mutate(HOUSING_TYPE = case_when(
+    grepl("Apartment", OR_house$BLD, ignore.case = TRUE) ~ "Apartment",
+    grepl("House|Mobile home|Trailer", OR_house$BLD, ignore.case = TRUE) ~ "House",
+    TRUE ~ "Others"
+  )) |>
+  filter(HOUSING_TYPE != 'Others')
+
+# Display the first few rows to verify the changes
+head(OR_house)
+
+```
+
+```{r}
+
+unique_values <- unique(OR_house$HOUSING_TYPE)
+
+# Print unique values
+print(unique_values)
+```
+
+
+```{r}
+
+OR_house_electricity <- OR_house |>
+  mutate(ELEP = ifelse(NP != 0 & !is.na(NP), ELEP, NA)) |>
+  group_by(HOUSING_TYPE) |>
+  filter(HOUSING_TYPE != 'Others') |>
+  summarise(MEAN_ELEP = mean(ELEP, na.rm = TRUE))
+
+# Display the resulting dataframe
+print(OR_house_electricity)
+
+```
+
+```{r}
+library(ggplot2)
+
+# Define colors for Apartment and House
+apartment_color <- "lightblue"
+house_color <- "orange"
+
+ggplot(OR_house_electricity, aes(x = HOUSING_TYPE, y = MEAN_ELEP, fill = HOUSING_TYPE)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Apartment vs House", y = "Mean Electricity Cost") +
+  ggtitle("Mean Electricity Cost for Apartment vs House") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Apartment" = apartment_color, "House" = house_color))
+
+
+```
+```{r}
+library(ggplot2)
+
+ggplot(OR_house, aes(x = NP, y = ELEP, color = HOUSING_TYPE)) +
+  geom_point() +
+  labs(x = "Number of People in Household", y = "Electricity Cost", color = "Housing Type") +
+  ggtitle("Electricity Cost by Number of People in Household and Housing Type") +
+  theme_minimal()
+
+```
+```{r}
+ggplot(OR_house, aes(x = BDSP, y = ELEP, color = HOUSING_TYPE)) +
+  geom_point() +  # Change to scatter plot
+  labs(x = "Number of Bedrooms in Household", y = "Electricity Cost", color = "Housing Type") +
+  ggtitle("Electricity Cost by Number of Bedrooms in Household and Housing Type") +
+  theme_minimal()
+
+```
+
+
+```{r}
+head(OR_house)
+```
+
+
+## Make hypothesis and explore the factors will have impact on ELEP ##
+
+
+$$H0: There \ is \ no \ difference \ in \ electricity \ cost \ between \ apartments \ and \ houses.$$
+$$H1: Electricity \ cost \  differs \ between \ apartments \ and \ houses.$$
+## Data preprocessing ##
+
+```{r}
+unique_values_HFL <- unique(OR_house$HFL)
+
+# Print unique values
+print(unique_values_HFL)
+```
+
+
+
+```{r}
+OR_house$Cleaned_HFL <- ifelse(OR_house$HFL == "Electricity", 1, 0)
+```
+
+```{r}
+OR_house <- OR_house[!is.na(OR_house$VALP), ]
+```
+
+
+## Feature selection ##
+```{r}
+library(corrplot)
+
+# Select specific numeric columns including the dependent variable
+numeric_cols <- OR_house[, c("NP", "BDSP", "FULP", "GASP", "RMSP", "VALP", "Cleaned_HFL", "ELEP")]
+
+# Calculate correlation matrix
+cor_matrix <- cor(numeric_cols)
+
+# Plot correlation matrix
+corrplot(cor_matrix, method = 'number', col = colorRampPalette(c("darkblue", "white", "darkred"))(100))
+
+
+```
+```{r}
+colSums(is.na(OR_house))
+
+```
+
+
+```{r}
+library(dplyr)
+OR_house <- OR_house |> 
+  select(NP, BDSP, FULP, GASP, RMSP, VALP, R18, R60, Cleaned_HFL, HOUSING_TYPE, ELEP)
+head(OR_house)
+```
+
+
+## Model selection ##
+
+```{r}
+model_1 <- lm(ELEP ~ factor(NP) + factor(Cleaned_HFL) + factor(BDSP), data = OR_house)
+summary(model_1)
+```
+```{r}
+model_2 <- lm(ELEP  ~ factor(NP) + factor(BDSP) + FULP + GASP + RMSP + VALP + 
+              R18 + R60 + factor(Cleaned_HFL) + factor(HOUSING_TYPE), data = OR_house)
+summary(model_2)
+```
+```{r}
+model_3 <- glm(ELEP ~ HOUSING_TYPE + factor(BDSP) + factor(RMSP) + factor(NP) + Cleaned_HFL,
+family = gaussian(link = "identity"), data = OR_house)
+summary(model_3)
+```
+```{r}
+null_model <- glm(ELEP ~ 1, family = gaussian(link = "identity"), data = OR_house)
+```
+
+
+```{r}
+lr_test <- anova(null_model, model_3, test = "Chisq")
+lr_test
+```
+
+```{r}
+residuals <- residuals(model_3, type = "pearson")
+
+chi_sq <- sum(residuals^2)
+# count of rows 
+df <- nrow(OR_house) - length(model_3$coefficients)
+df
+p_value <- pchisq(chi_sq, df, lower.tail = FALSE)
+p_value
+```
+```{r}
+plot(model_3)
+```
+
+
+# Predictive Analysis#
+
+```{r}
+
+num_rows <- nrow(OR_house)
+print(num_rows)
+
+```
+
+## Model selection and training ##
+
+```{r}
+set.seed(123)
+
+train_proportion <- 0.7
+
+num_train_rows <- round(train_proportion * nrow(OR_house))
+
+train_indices <- sample(seq_len(nrow(OR_house)), size = num_train_rows)
+
+train_data <- OR_house[train_indices, ]
+
+validation_data <- OR_house[-train_indices, ]
+
+
+```
+
+```{r}
+
+model1 <- lm(ELEP ~ factor(NP) + factor(Cleaned_HFL) + factor(BDSP), data = train_data)
+summary(model1)
+```
+## Model evaluation ##
+
+```{r}
+# To evaluate the accuracy of your model on the validation data 
+predicted_values_1 <- predict(model1, validation_data)
+# Calculate mean squared error (MSE)
+mse <- mean((predicted_values_1 - validation_data$ELEP)^2)
+# Calculate mean absolute error (MAE)
+mae <- mean(abs(predicted_values_1 - validation_data$ELEP))
+rsquared <- 1 - sum((validation_data$ELEP - predicted_values_1)^2) / sum((validation_data$ELEP - mean(validation_data$ELEP))^2)
+
+# Print the metrics
+print(paste("Mean Squared Error (MSE):", mse))
+print(paste("Mean Absolute Error (MAE):", mae))
+print(paste("R-squared:", rsquared))
+
+
+```
+```{r}
+aic_train_1 <- AIC(model1)
+
+bic_train_1 <- BIC(model1)
+
+# Print the results
+print(paste("AIC:", aic_train_1))
+print(paste("BIC:", bic_train_1))
+```
+
+
+
+```{r}
+model_2 <- lm(ELEP  ~ factor(NP) + factor(BDSP) + FULP + GASP + RMSP + VALP + 
+              R18 + R60 + factor(Cleaned_HFL) + factor(HOUSING_TYPE), data = train_data)
+summary(model_2)
+```
+```{r}
+# To evaluate the accuracy of your model on the validation data 
+predicted_values_2 <- predict(model_2, validation_data)
+# Calculate mean squared error (MSE)
+mse_2 <- mean((predicted_values_2 - validation_data$ELEP)^2)
+# Calculate mean absolute error (MAE)
+mae_2 <- mean(abs(predicted_values_2 - validation_data$ELEP))
+rsquared_2 <- 1 - sum((validation_data$ELEP - predicted_values_2)^2) / 
+  sum((validation_data$ELEP - mean(validation_data$ELEP))^2)
+
+# Print the metrics
+print(paste("Mean Squared Error (MSE):", mse_2))
+print(paste("Mean Absolute Error (MAE):", mae_2))
+print(paste("R-squared:", rsquared_2))
+
+```
+```{r}
+aic_train_2 <- AIC(model_2)
+
+bic_train_2 <- BIC(model_2)
+
+# Print the results
+print(paste("AIC:", aic_train_2))
+print(paste("BIC:", bic_train_2))
+```
+
+```{r}
+model_3 <- glm(ELEP ~ HOUSING_TYPE + factor(BDSP) + factor(RMSP) + factor(NP) + Cleaned_HFL,
+family = poisson(link = "log"), data = train_data)
+summary(model_3)
+```
+
+```{r}
+# To evaluate the accuracy of your model on the validation data 
+predicted_values_3 <- predict(model_3, validation_data)
+# Calculate mean squared error (MSE)
+mse_3 <- mean((predicted_values_3 - validation_data$ELEP)^2)
+# Calculate mean absolute error (MAE)
+mae_3 <- mean(abs(predicted_values_2 - validation_data$ELEP))
+rsquared_3 <- 1 - sum((validation_data$ELEP - predicted_values_3)^2) / 
+  sum((validation_data$ELEP - mean(validation_data$ELEP))^2)
+
+# Print the metrics
+print(paste("Mean Squared Error (MSE):", mse_3))
+print(paste("Mean Absolute Error (MAE):", mae_3))
+print(paste("R-squared:", rsquared_2))
+```
+
+```{r}
+aic_train_3 <- AIC(model_3)
+
+bic_train_3 <- BIC(model_3)
+
+# Print the results
+print(paste("AIC:", aic_train_3))
+print(paste("BIC:", bic_train_3))
+```
+
+Summary:
+I evaluate the model by using several different factors including MSE, MAE, R-squared, AIC, BIC. 
+Below is a brief overview of each metrics:
+
+MSE: MSE measures the average squared difference between the predicted values and the actual values. 
+Lower MSE indicates better model performance. From model 1,2,3, model 2 has the lowest MSE.
+
+MAE: MAE measures the average absolute difference between the predicted values and the actual values. 
+Lower MAE indicates better model performance. From model 1,2,3, model 2,3 has the lowest MSE.
+
+R-squared: R-squared represents the proportion of variance in ELEP that is explained by the 
+independent variables (predictors). Higher R-squared values indicate better fit. From model 1, 2,3, 
+model 2,3 has the highest R-squared.
+
+AIC, BIC: measure of the relative quality of a statistical model for a given set of data. It also 
+balances goodness of fit and model complexity. Lower AIC, BIC values indicate better model performance.
+Model 2 has the lowest AIC, BIC values.
+
+Therefore, Model 2 appears to have the best performance among the three models based on these metrics. 
+It shows a good balance between prediction accuracy, explanatory power, and model complexity.
+
+
+# Compare and Contrast #
+
+Exploratory Analysis:
+
+Purpose: The main goal is to understand the dataset, identify patterns, missing data, 
+relationships, and potential outliers, and gain insights into the underlying structure 
+of the data.
+
+Approach: Exploratory analysis typically involves descriptive statistics, data 
+visualization, and preliminary modeling to examine the data from various angles. 
+It often focuses on summarizing the main characteristics of the datasets and 
+identifying potential trends or anomalies.
+
+Challenge: The challenge I have in this analysis includes cleaning null or missing 
+data, changing numerical variables into categorical variables, and finding what 
+factors might have an impact on dependent variables. Also, creating a new column: 
+HOUSING_TYPE is challenging since there are different values under BLD. I need to 
+check the unique values first before I create the new columns. Moreover, for HFL = 
+Electricity will have a significant impact on ELEP, I created a new column Cleaned 
+HFL which only includes Electricity or not Electricity under the attributes. 
+
+Predictive Modeling:
+
+Purpose: The primary objective is to develop a model that can make accurate predictions 
+on new, unseen data based on patterns learned from historical data.
+
+Approach: Predictive modeling involves selecting appropriate algorithms, splitting 
+the dataset into training and testing sets, model training, evaluation, and fine-tuning. 
+It focuses on maximizing predictive performance metrics such as mse, mae, R-squared, 
+AIC, BIC, etc
+
+Challenge: The challenge I have is choosing the best performance of the predictive 
+analysis model and how to interpret the model results.
+
+The reason why different approaches are required is that Exploratory analysis provides 
+insights into the dataset and helps identify relevant variables and potential predictive 
+features. It paves the way for building predictive models by informing feature selection 
+and engineering. 
+
+Predictive modeling aims to develop models that can generalize well to new data 
+and make accurate predictions. It requires rigorous validation and evaluation techniques 
+to ensure model performance.
+
+Exploratory analysis is more open-ended and focuses on understanding the data, while 
+predictive modeling has a more specific goal of developing models for prediction. It 
+often precedes predictive modeling, providing insights, and informing model development. 
+Both tasks require careful consideration of data quality, feature selection, and model 
+evaluation techniques, but they differ in their primary objectives and methodologies.
+
+
+
