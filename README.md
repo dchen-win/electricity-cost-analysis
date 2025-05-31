@@ -102,19 +102,3 @@ Model comparison (on validation set):
 - Extend analysis to **other U.S. states** or **year-over-year trends**
 
 ---
-
-## 📁 Repo Contents
-
-```plaintext
-├── data/
-│   └── OR_acs_house_occ.csv
-├── scripts/
-│   ├── data_cleaning.R
-│   ├── model_fitting.R
-│   └── exploratory_analysis.R
-├── figures/
-│   ├── elep_by_housing_type.png
-│   └── correlation_matrix.png
-├── report/
-│   └── Electricity_Cost_Report.pdf
-├── README.md
